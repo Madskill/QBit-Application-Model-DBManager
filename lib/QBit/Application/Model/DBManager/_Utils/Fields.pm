@@ -105,6 +105,42 @@ sub process_data {
     return \@res;
 }
 
+sub process_data_for_prefetch {
+    my ($self, $data, $field_names, $prefix) = @_;
+
+    my @fields = @{$self->{'__FIELD_NAMES__'}};
+
+    foreach my $rec (@$data) {
+        foreach my $field (@fields) {
+            my $field_name = defined($field_names) ? ($field_names->{$field} // "${prefix}_$field") : $field;
+            if (exists($rec->{$field_name})) {
+                #nothing to do
+            } elsif (exists($self->{'__FIELDS__'}{$field}{'get'})) {
+                $rec->{$field_name} = $self->{'__FIELDS__'}{$field}{'get'}(
+                    $self,
+                    (
+                        defined($field_names)
+                        ? {map {$_ => $rec->{$field_names->{$_}}} keys(%$field_names)}
+                        : $rec
+                    )
+                );
+            } elsif ($self->{'__FIELDS__'}{$field}{'i18n'}) {
+                $rec->{$field_name} =
+                  {map {$_ => $rec->{"${field_name}_${_}"}} keys(%{$self->model->get_option('locales', {})})};
+            } else {
+                throw gettext('Cannot get field "%s"', $field_name);
+            }
+        }
+
+        foreach my $field (@fields) {
+            my $field_name = defined($field_names) ? ($field_names->{$field} // "${prefix}_$field") : $field;
+            delete($rec->{$field_name}) if $self->{'__FIELDS__'}{$field}{'need_delete'};
+        }
+    }
+
+    return $data;
+}
+
 sub need {
     my ($self, $name) = @_;
 

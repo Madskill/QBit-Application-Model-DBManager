@@ -31,13 +31,13 @@ sub model_filter {
     my ($class, %opts) = @_;
 
     my $pkg_stash = package_stash($class);
-    $pkg_stash->{'__DB_FILTER__'} = $opts{'fields'} || return;
 
     $pkg_stash->{'__DB_FILTER_DBACCESSOR__'} = $opts{'db_accessor'} || 'db';
     throw Exception::BadArguments gettext("Cannot find DB accessor %s, package %s",
         $pkg_stash->{'__DB_FILTER_DBACCESSOR__'}, $class)
       unless $class->can($pkg_stash->{'__DB_FILTER_DBACCESSOR__'});
 
+    $pkg_stash->{'__DB_FILTER__'} = $opts{'fields'} || return;
 }
 
 sub get_model_fields {
@@ -152,6 +152,146 @@ sub get_all {
 
         $self->timelog->start(gettext('Process data'));
         $result = $fields->process_data($result);
+        $self->timelog->finish();
+    }
+
+    $self->timelog->finish();
+
+    return $result;
+}
+
+sub prefetch {
+    my ($self, %opts) = @_;
+
+    $self->timelog->start(gettext('%s: get_all', ref($self)));
+
+    my $fields = $self->_get_fields_obj($opts{'fields'});
+
+    $self->{'__LAST_FIELDS__'} = $fields->get_fields();
+    foreach (keys(%{$self->{'__LAST_FIELDS__'}})) {    # Hide unavailable fields
+        delete($self->{'__LAST_FIELDS__'}{$_}) if $self->{'__LAST_FIELDS__'}{$_}{'need_delete'};
+    }
+
+    my %all_fields = %{$fields->get_db_fields()};
+
+    my $query = $self->query(
+        fields => $fields,
+        filter => $self->get_db_filter($opts{'filter'}),
+    )->all_langs($opts{'all_locales'});
+
+    $opts{'models'} //= [];
+    $opts{'models'} = [$opts{'models'}] unless ref($opts{'models'}) eq 'ARRAY';
+
+    my $models_fields = {};
+
+    foreach my $params (@{$opts{'models'}}) {
+        my $accessor = $params->{'accessor'};
+
+        my $model = $self->app->$accessor;
+
+        $self->timelog->start(gettext('%s: join query', ref($model)));
+
+        $models_fields->{$accessor}{'object'} = $model->_get_fields_obj($params->{'fields'});
+
+        my $subquery = $model->query(
+            fields => $models_fields->{$accessor}{'object'},
+            filter => $model->get_db_filter($params->{'filter'})
+        )->all_langs($opts{'all_locales'});
+
+        $params->{'join_type'} = $params->{'join_type'} ? uc($params->{'join_type'}) : 'INNER JOIN';
+
+        foreach my $table (@{$subquery->{'__TABLES__'}}) {
+            my $t_fields = $table->{'fields'};
+            my @duplicate_fields = grep {exists($all_fields{$_})} keys(%$t_fields);
+
+            throw gettext('Use "prefix" for "%s", following fields duplicated: %s',
+                $accessor, join(', ', @duplicate_fields))
+              if @duplicate_fields && !defined($params->{'prefix'});
+
+            if (defined($params->{'prefix'})) {
+                my %new_fields = ();
+                foreach my $field (keys(%$t_fields)) {
+                    my $new_field = "$params->{'prefix'}_$field";
+
+                    if (ref($t_fields->{$field})) {
+                        $new_fields{$new_field} = $t_fields->{$field};
+                    } else {
+                        $new_fields{$new_field} = {$field => $table->{'table'}};
+                    }
+
+                    $models_fields->{$accessor}{'fields'}{$field} = $new_field;
+                }
+
+                $table->{'fields'} = \%new_fields;
+            }
+
+            $query->join(%$table, map {$_ => $params->{$_}} grep {exists($params->{$_})} qw(join_type join_on));
+
+            delete($params->{'join_type'});
+            delete($params->{'join_on'});
+        }
+
+        $self->timelog->finish();
+    }
+
+    $query->distinct if $opts{'distinct'};
+
+    if ($opts{'order_by'}) {
+        my %db_fields = map {$_ => TRUE} keys(%{$fields->get_db_fields()});
+
+        my @order_by = map {[ref($_) ? ($_->[0], $_->[1]) : ($_, 0)]}
+          grep {exists($db_fields{ref($_) ? $_->[0] : $_})} @{$opts{'order_by'}};
+
+        $query->order_by(@order_by) if @order_by;
+    }
+
+    $query->limit($opts{'offset'}, $opts{'limit'}) if $opts{'limit'};
+
+    $query->calc_rows(1) if $opts{'calc_rows'};
+
+    my $result = $query->get_all();
+
+    $self->{'__FOUND_ROWS__'} = $query->found_rows() if $opts{'calc_rows'};
+
+    if (@$result) {
+        foreach my $params (@{$opts{'models'}}) {
+            my $accessor = $params->{'accessor'};
+
+            my $model      = $self->app->$accessor;
+            my $model_name = ref($model);
+
+            my $field_names   = $models_fields->{$accessor}{'fields'};
+            my $object_fields = $models_fields->{$accessor}{'object'};
+
+            $self->timelog->start(gettext('Preprocess fields for %s', $model_name));
+            $self->pre_process_fields(
+                $object_fields,
+                (
+                    defined($field_names)
+                    ? [
+                        map {
+                            my $row = $_;
+                            {
+                                map {$_ => $row->{$field_names->{$_}}} keys(%$field_names)
+                            }
+                          } @$result
+                      ]
+                    : $result
+                )
+            );
+            $self->timelog->finish();
+
+            $self->timelog->start(gettext('Process data for %s', $model_name));
+            $result = $object_fields->process_data_for_prefetch($result, $field_names, $params->{'prefix'});
+            $self->timelog->finish();
+        }
+
+        $self->timelog->start(gettext('Preprocess fields'));
+        $self->pre_process_fields($fields, $result);
+        $self->timelog->finish();
+
+        $self->timelog->start(gettext('Process data'));
+        $result = $fields->process_data_for_prefetch($result);
         $self->timelog->finish();
     }
 
