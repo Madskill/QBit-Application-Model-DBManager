@@ -206,63 +206,71 @@ sub pre_process_easy_fields {
 
     my $fields = $obj_fields->get_fields();
 
-    my @easy_fields = grep {$obj_fields->need($_) && exists($fields->{$_}{'model_accessor'})} keys(%$fields);
+    my @easy_fields = grep {$obj_fields->need($_) && exists($fields->{$_}{'fk_fields'})} keys(%$fields);
 
     my $pre_process_fields = {};
     foreach my $field (@easy_fields) {
-        my $model_accessor = $fields->{$field}{'model_accessor'};
-        my $fk_fields      = join('#', @{$fields->{$field}{'fk_fields'}});
-        my $count          = 1;
-        map {$pre_process_fields->{$model_accessor}{$fk_fields}{'fields'}{$_} = TRUE} @{$fields->{$field}{'fields'}},
-          grep {!($count++ & 1)} @{$fields->{$field}{'fk_fields'}};
-        $pre_process_fields->{$model_accessor}{$fk_fields}{'fk_fields'} = $fields->{$field}{'fk_fields'};
-    }
+        my $fk_fields = $fields->{$field}{'fk_fields'};
+        
+        my $key = join('|', @{$fk_fields->[0]}, @{$fk_fields->[2]});
 
+        my $accessor = $fk_fields->[1];
+
+        foreach (@{$fk_fields->[2]}, @{$fields->{$field}{'fields'}}) {
+            $pre_process_fields->{$accessor}{$key}{'fields'}{$_} = TRUE;
+        }
+
+        $pre_process_fields->{$accessor}{$key}{'fk_fields'} = $fk_fields;
+    }
+    
     my $DATA;
 
     foreach my $model (keys(%$pre_process_fields)) {
-        foreach my $fk_fields (keys(%{$pre_process_fields->{$model}})) {
-            next if exists($DATA->{$model}{$fk_fields});
-            my $filter = {};
-            my $i      = 0;
-            while ($i < @{$pre_process_fields->{$model}{$fk_fields}{'fk_fields'}} - 1) {
-                my $j = $i + 1;
-                $filter->{$pre_process_fields->{$model}{$fk_fields}{'fk_fields'}[$j]} =
-                  array_uniq(map {$_->{$pre_process_fields->{$model}{$fk_fields}{'fk_fields'}[$i]}} @$data);
-                $i += 2;
+        foreach my $key (keys(%{$pre_process_fields->{$model}})) {
+            my $fk_fields = $pre_process_fields->{$model}{$key}{'fk_fields'};
+
+            my @filters = ();
+
+            foreach my $row (@$data) {
+                my %filter = ();
+                @filter{@{$fk_fields->[2]}} = @$row{@{$fk_fields->[0]}};
+                push(@filters, \%filter);
             }
 
-            $DATA->{$model}{$fk_fields} = $self->$model->get_all(
-                fields => [keys(%{$pre_process_fields->{$model}{$fk_fields}{'fields'}})],
-                filter => $filter
+            $DATA->{$model}{$key} = $self->$model->get_all(
+                fields => [keys(%{$pre_process_fields->{$model}{$key}{'fields'}})],
+                filter => ['OR', \@filters]
             );
         }
     }
-
+    
     foreach my $field (@easy_fields) {
-        my $model     = $fields->{$field}{'model_accessor'};
-        my $fk_fields = join('#', @{$fields->{$field}{'fk_fields'}});
-        my $result    = $fields->{$field}{'result'} || 'SCALAR';
+        my $fk_fields = $fields->{$field}{'fk_fields'};
+        
+        my $key = join('|', @{$fk_fields->[0]}, @{$fk_fields->[2]});
+
+        my $model = $fk_fields->[1];
+        my $result = $fields->{$field}{'result'} || 'SCALAR';
+
         if (($result eq 'SCALAR' || $result eq 'HASH')
-            && !exists($obj_fields->{'__GROUP_DATA__'}{$model}{$fk_fields}{'SCALAR_HASH'}))
+            && !exists($obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}))
         {
-            foreach $data (@{$DATA->{$model}{$fk_fields}}) {
-                my $count = 1;
-                my @key_list = map {$data->{$_}} grep {!($count++ & 1)} @{$fields->{$field}{'fk_fields'}};
-                $self->_add_key_with_hash(\$obj_fields->{'__GROUP_DATA__'}{$model}{$fk_fields}{'SCALAR_HASH'},
-                    \@key_list, 1, $data);
+            foreach my $row (@{$DATA->{$model}{$key}}) {
+                my @key = @$row{@{$fk_fields->[2]}};
+                $obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}{@key} = $row;
             }
-        } elsif ($result eq 'ARRAY' && !exists($obj_fields->{'__GROUP_DATA__'}{$model}{$fk_fields}{'ARRAY'})) {
-            foreach my $data (@{$DATA->{$model}{$fk_fields}}) {
-                my $count = 1;
-                my @key_list = map {$data->{$_}} grep {!($count++ & 1)} @{$fields->{$field}{'fk_fields'}};
-                $self->_add_key_with_array(\$obj_fields->{'__GROUP_DATA__'}{$model}{$fk_fields}{'ARRAY'},
-                    \@key_list, 1, $data);
+        } elsif ($result eq 'ARRAY' && !exists($obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'ARRAY'})) {
+            foreach my $row (@{$DATA->{$model}{$key}}) {
+                my @key = @$row{@{$fk_fields->[2]}};
+                push(@{$obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'ARRAY'}{@key}}, $row);
             }
         } else {
             throw gettext('Unknown type of result "%s"', $result);
         }
     }
+    
+    ldump($obj_fields->{'__GROUP_DATA__'});
+    exit;
 }
 
 sub _add_key_with_hash {

@@ -25,77 +25,67 @@ __PACKAGE__->model_fields(
         label   => d_gettext('Short caption'),
     },
     name => {
-        depends_on     => ['f_id'],
-        model_accessor => 'model_1',
-        fk_fields      => ['f_id' => 'id'],
-        fields         => ['caption'],
-        result         => 'SCALAR',
+        depends_on => ['f_id'],
+        fk_fields  => [['f_id'] => 'model_1' => ['id']],
+        fields     => ['caption'],
+        result     => 'SCALAR',
     },
     name_array => {
-        depends_on     => ['f_id'],
-        model_accessor => 'model_1',
-        fk_fields      => ['f_id' => 'id'],
-        fields         => ['caption'],
-        result         => 'ARRAY',
+        depends_on => ['f_id'],
+        fk_fields  => [['f_id'] => 'model_1' => ['id']],
+        fields     => ['caption'],
+        result     => 'ARRAY',
     },
     name_hash => {
-        depends_on     => ['f_id'],
-        model_accessor => 'model_1',
-        fk_fields      => ['f_id' => 'id'],
-        fields         => ['caption'],
-        result         => 'HASH',
+        depends_on => ['f_id'],
+        fk_fields  => [['f_id'] => 'model_1' => ['id']],
+        fields     => ['caption'],
+        result     => 'HASH',
     },
     info => {
-        depends_on     => ['f_id'],
-        model_accessor => 'model_1',
-        fk_fields      => ['f_id' => 'id'],
-        fields         => ['caption', 'domain'],
-        result         => 'HASH',
+        depends_on => ['f_id'],
+        fk_fields  => [['f_id'] => 'model_1' => ['id']],
+        fields => ['caption', 'domain'],
+        result => 'HASH',
     },
     ids_by_owner => {
-        depends_on     => ['owner'],
-        model_accessor => 'model_1',
-        fk_fields      => ['owner' => 'creator'],
-        fields         => ['id'],
-        result         => 'ARRAY',
+        depends_on => ['owner'],
+        fk_fields  => [['owner'] => 'model_1' => ['creator']],
+        fields     => ['id'],
+        result     => 'ARRAY',
     },
     ids_with_owner => {
-        depends_on     => ['owner'],
-        model_accessor => 'model_1',
-        fk_fields      => ['owner' => 'creator'],
-        fields         => ['id', 'creator'],
-        result         => 'ARRAY',
+        depends_on => ['owner'],
+        fk_fields  => [['owner'] => 'model_1' => ['creator']],
+        fields => ['id', 'creator'],
+        result => 'ARRAY',
     },
     ids_string_by_owner => {
-        depends_on     => ['owner'],
-        model_accessor => 'model_1',
-        fk_fields      => ['owner' => 'creator'],
-        fields         => ['id'],
-        result         => 'ARRAY',
-        get => sub {
+        depends_on => ['owner'],
+        fk_fields  => [['owner'] => 'model_1' => ['creator']],
+        fields     => ['id'],
+        result     => 'ARRAY',
+        get        => sub {
             join(', ', @{$_[2]});
-        }
+          }
     },
     two_fk_fields => {
-        depends_on     => ['f_id', 'owner'],
-        model_accessor => 'model_1',
-        fk_fields      => ['f_id' => 'id', 'owner' => 'creator'],
-        fields         => ['domain'],
-        result         => 'SCALAR',
+        depends_on => ['f_id', 'owner'],
+        fk_fields => [['f_id', 'owner'] => 'model_1' => ['id', 'creator']],
+        fields    => ['domain'],
+        result    => 'SCALAR',
     },
     two_fk_fields_hash => {
-        depends_on     => ['f_id', 'owner'],
-        model_accessor => 'model_1',
-        fk_fields      => ['f_id' => 'id', 'owner' => 'creator'],
-        fields         => ['domain', 'creator'],
-        result         => 'HASH',
+        depends_on => ['f_id', 'owner'],
+        fk_fields => [['f_id',  'owner'] => 'model_1' => ['id', 'creator']],
+        fields    => ['domain', 'creator'],
+        result    => 'HASH',
     },
     two_fk_fields_array => {
-        depends_on     => ['short_caption', 'owner'],
-        model_accessor => 'model_1',
-        fk_fields      => ['short_caption' => 'caption', 'owner' => 'creator'],
-        fields         => ['id'],
-        result         => 'ARRAY',
+        depends_on => ['short_caption', 'owner'],
+        fk_fields => [['short_caption', 'owner'] => 'model_1' => ['caption', 'creator']],
+        fields    => ['id'],
+        result    => 'ARRAY',
     },
 );
 
@@ -116,7 +106,7 @@ sub query {
                 foreach my $field (grep {$_ ne 'f_id'} keys(%$fields)) {
                     $var->{$field} = "$field $count";
                 }
-                push (@result, $var);
+                push(@result, $var);
             }
             return \@result;
         }

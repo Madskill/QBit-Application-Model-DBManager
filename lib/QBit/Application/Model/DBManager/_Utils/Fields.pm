@@ -90,23 +90,22 @@ sub process_data {
             my $val;
             if (exists($rec->{$field})) {
                 $val = $rec->{$field};
-            } elsif (exists($self->{'__FIELDS__'}{$field}{'model_accessor'})) {
-                my $model     = $self->{'__FIELDS__'}{$field}{'model_accessor'};
-                my $fk_fields = join('#', @{$self->{'__FIELDS__'}{$field}{'fk_fields'}});
-                my $result    = $self->{'__FIELDS__'}{$field}{'result'} || 'SCALAR';
-                my $count     = 1;
-                my @key_list  = map {$rec->{$_}} grep {$count++ & 1} @{$self->{'__FIELDS__'}{$field}{'fk_fields'}};
+            } elsif (exists($self->{'__FIELDS__'}{$field}{'fk_fields'})) {
+                my $fk_fields = $self->{'__FIELDS__'}{$field}{'fk_fields'};
+
+                my $model = $fk_fields->[1];
+                my $result = $self->{'__FIELDS__'}{$field}{'result'} || 'SCALAR';
+
+                my @key = @$rec{@{$fk_fields->[0]}};
+
                 if ($result eq 'SCALAR') {
-                    my $value =
-                      $self->_get_value($self->{'__GROUP_DATA__'}{$model}{$fk_fields}{'SCALAR_HASH'}, \@key_list, 1);
+                    my $value = $self->{'__GROUP_DATA__'}{$model}{@{$fk_fields->[0]}}{'SCALAR_HASH'}{@key};
                     $val = $value->{$self->{'__FIELDS__'}{$field}{'fields'}[0]};
                 } elsif ($result eq 'HASH') {
-                    my $value =
-                      $self->_get_value($self->{'__GROUP_DATA__'}{$model}{$fk_fields}{'SCALAR_HASH'}, \@key_list, 1);
+                    my $value = $self->{'__GROUP_DATA__'}{$model}{@{$fk_fields->[0]}}{'SCALAR_HASH'}{@key};
                     $val = {map {$_ => $value->{$_}} @{$self->{'__FIELDS__'}{$field}{'fields'}}};
                 } elsif ($result eq 'ARRAY') {
-                    my $value =
-                      $self->_get_value($self->{'__GROUP_DATA__'}{$model}{$fk_fields}{'ARRAY'}, \@key_list, 1);
+                    my $value = $self->{'__GROUP_DATA__'}{$model}{@{$fk_fields->[0]}}{'ARRAY'}{@key};
                     if (@{$self->{'__FIELDS__'}{$field}{'fields'}} == 1) {
                         $val = [map {$_->{$self->{'__FIELDS__'}{$field}{'fields'}[0]}} @$value];
                     } else {
