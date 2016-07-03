@@ -92,20 +92,22 @@ sub process_data {
                 $val = $rec->{$field};
             } elsif (exists($self->{'__FIELDS__'}{$field}{'fk_fields'})) {
                 my $fk_fields = $self->{'__FIELDS__'}{$field}{'fk_fields'};
+                
+                my $key = $self->model->_get_key(@{$fk_fields->[0]}, @{$fk_fields->[2]});
 
                 my $model = $fk_fields->[1];
                 my $result = $self->{'__FIELDS__'}{$field}{'result'} || 'SCALAR';
 
-                my @key = @$rec{@{$fk_fields->[0]}};
+                my $ids = $self->model->_get_key(@$rec{@{$fk_fields->[0]}});
 
                 if ($result eq 'SCALAR') {
-                    my $value = $self->{'__GROUP_DATA__'}{$model}{@{$fk_fields->[0]}}{'SCALAR_HASH'}{@key};
+                    my $value = $self->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}{$ids};
                     $val = $value->{$self->{'__FIELDS__'}{$field}{'fields'}[0]};
                 } elsif ($result eq 'HASH') {
-                    my $value = $self->{'__GROUP_DATA__'}{$model}{@{$fk_fields->[0]}}{'SCALAR_HASH'}{@key};
+                    my $value = $self->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}{$ids};
                     $val = {map {$_ => $value->{$_}} @{$self->{'__FIELDS__'}{$field}{'fields'}}};
                 } elsif ($result eq 'ARRAY') {
-                    my $value = $self->{'__GROUP_DATA__'}{$model}{@{$fk_fields->[0]}}{'ARRAY'}{@key};
+                    my $value = $self->{'__GROUP_DATA__'}{$model}{$key}{'ARRAY'}{$ids};
                     if (@{$self->{'__FIELDS__'}{$field}{'fields'}} == 1) {
                         $val = [map {$_->{$self->{'__FIELDS__'}{$field}{'fields'}[0]}} @$value];
                     } else {

@@ -212,7 +212,7 @@ sub pre_process_easy_fields {
     foreach my $field (@easy_fields) {
         my $fk_fields = $fields->{$field}{'fk_fields'};
         
-        my $key = join('|', @{$fk_fields->[0]}, @{$fk_fields->[2]});
+        my $key = $self->_get_key(@{$fk_fields->[0]}, @{$fk_fields->[2]});
 
         my $accessor = $fk_fields->[1];
 
@@ -247,7 +247,7 @@ sub pre_process_easy_fields {
     foreach my $field (@easy_fields) {
         my $fk_fields = $fields->{$field}{'fk_fields'};
         
-        my $key = join('|', @{$fk_fields->[0]}, @{$fk_fields->[2]});
+        my $key = $self->_get_key(@{$fk_fields->[0]}, @{$fk_fields->[2]});
 
         my $model = $fk_fields->[1];
         my $result = $fields->{$field}{'result'} || 'SCALAR';
@@ -256,43 +256,24 @@ sub pre_process_easy_fields {
             && !exists($obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}))
         {
             foreach my $row (@{$DATA->{$model}{$key}}) {
-                my @key = @$row{@{$fk_fields->[2]}};
-                $obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}{@key} = $row;
+                my @ids = @$row{@{$fk_fields->[2]}};
+                $obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'SCALAR_HASH'}{$self->_get_key(@ids)} = $row;
             }
         } elsif ($result eq 'ARRAY' && !exists($obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'ARRAY'})) {
             foreach my $row (@{$DATA->{$model}{$key}}) {
-                my @key = @$row{@{$fk_fields->[2]}};
-                push(@{$obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'ARRAY'}{@key}}, $row);
+                my @ids = @$row{@{$fk_fields->[2]}};
+                push(@{$obj_fields->{'__GROUP_DATA__'}{$model}{$key}{'ARRAY'}{$self->_get_key(@ids)}}, $row);
             }
         } else {
             throw gettext('Unknown type of result "%s"', $result);
         }
     }
+}
+
+sub _get_key {
+    my ($self, @values) = @_;
     
-    ldump($obj_fields->{'__GROUP_DATA__'});
-    exit;
-}
-
-sub _add_key_with_hash {
-    my ($self, $hash, $key_list, $num, $value) = @_;
-
-    if (@$key_list == $num) {
-        $$hash->{$key_list->[$num - 1]} = $value;
-        return TRUE;
-    }
-
-    $self->_add_key_with_hash(\$$hash->{$key_list->[$num - 1]}, $key_list, ++$num, $value);
-}
-
-sub _add_key_with_array {
-    my ($self, $hash, $key_list, $num, $value) = @_;
-
-    if (@$key_list == $num) {
-        push(@{$$hash->{$key_list->[$num - 1]}}, $value);
-        return TRUE;
-    }
-
-    $self->_add_key_with_array(\$$hash->{$key_list->[$num - 1]}, $key_list, ++$num, $value);
+    return join('|', map {$_ // 'undef'} @values);
 }
 
 sub _get_fields_obj {

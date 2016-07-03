@@ -14,9 +14,6 @@ $app->timelog->mock('start', sub { });
 
 $app->timelog->mock('finish', sub { });
 
-ldump($app->model_2->get_all(fields => ['name']));
-exit;
-
 is_deeply(
     $app->model_2->get_all(fields => ['name']),
     [
@@ -28,8 +25,6 @@ is_deeply(
     ],
     'type: SCALAR'
 );
-
-exit;
 
 is_deeply(
     $app->model_2->get_all(fields => ['name_array']),
